@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ضغط ملفات PDF</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #4b2bbf, #9b4dff);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .box {
+      background: white;
+      width: 100%;
+      max-width: 550px;
+      padding: 30px;
+      border-radius: 20px;
+      text-align: center;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.2);
+    }
+
+    h1 {
+      color: #4b2bbf;
+      margin-bottom: 10px;
+    }
+
+    p {
+      color: #666;
+      line-height: 1.7;
+    }
+
+    input, select, button {
+      width: 100%;
+      padding: 14px;
+      margin-top: 15px;
+      border-radius: 10px;
+      border: 1px solid #ddd;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+
+    button {
+      background: #4b2bbf;
+      color: white;
+      border: none;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      background: #999;
+    }
+
+    #status {
+      margin-top: 15px;
+      font-weight: bold;
+      color: #4b2bbf;
+    }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>ضغط ملفات PDF</h1>
+    <p>اختار من 1 إلى 10 ملفات PDF مرة واحدة، وبعد الضغط هينزل لك ملف ZIP.</p>
+
+    <form id="form">
+      <input type="file" name="pdfs" accept="application/pdf,.pdf" multiple required />
+
+      <select name="quality">
+        <option value="strong">ضغط قوي جدًا</option>
+        <option value="medium" selected>ضغط متوسط</option>
+        <option value="light">ضغط خفيف وجودة أعلى</option>
+      </select>
+
+      <button id="btn" type="submit">ضغط الملفات</button>
+    </form>
+
+    <div id="status"></div>
+  </div>
+
+  <script>
+    const form = document.getElementById("form");
+    const status = document.getElementById("status");
+    const btn = document.getElementById("btn");
+
+    form.addEventListener("submit", async function(e) {
+      e.preventDefault();
+
+      const files = form.querySelector("input[type=file]").files;
+
+      if (files.length > 10) {
+        status.textContent = "مسموح برفع 10 ملفات فقط";
+        return;
+      }
+
+      const formData = new FormData(form);
+      status.textContent = "جاري رفع وضغط الملفات...";
+      btn.disabled = true;
+
+      try {
+        const response = await fetch("/compress", {
+          method: "POST",
+          body: formData
+        });
+
+        if (!response.ok) {
+          status.textContent = "حصل خطأ أثناء الضغط";
+          btn.disabled = false;
+          return;
+        }
+
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "compressed-pdfs.zip";
+        a.click();
+
+        URL.revokeObjectURL(url);
+        status.textContent = "تم الضغط والتحميل بنجاح";
+      } catch (err) {
+        status.textContent = "فشل الاتصال بالسيرفر";
+      }
+
+      btn.disabled = false;
+    });
+  </script>
+</body>
+</html>

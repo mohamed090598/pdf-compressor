@@ -11,7 +11,9 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.static("public"));
-
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 const uploadDir = path.join(__dirname, "uploads");
 const compressedDir = path.join(__dirname, "compressed");
 

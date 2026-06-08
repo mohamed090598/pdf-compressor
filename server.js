@@ -27,8 +27,7 @@ function safeName(name) {
 const storage = multer.diskStorage({
   destination: uploadDir,
   filename: (req, file, cb) => {
-    cb(null, Date.now() + "-" + safeName(file.originalname));
-  },
+    cb(null, safeName(file.originalname));
 });
 
 const upload = multer({

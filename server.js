@@ -22,8 +22,15 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-function safeName(name) {
-  return path.basename(name);
+function getOriginalName(file) {
+  let name = file.originalname;
+
+  // إصلاح مشكلة ظهور العربي كرموز غريبة
+  if (/[ÃÂØÙ]/.test(name)) {
+    name = Buffer.from(name, "latin1").toString("utf8");
+  }
+
+  return path.basename(name).replace(/[\\/:*?"<>|]/g, "_");
 }
 
 const storage = multer.diskStorage({
@@ -105,7 +112,7 @@ app.post("/compress", upload.array("pdfs", 10), async (req, res) => {
       toDelete.push(inputPath);
 
       // ده الاسم الأصلي اللي هينزل للمستخدم بدون تغيير
-      const originalName = safeName(file.originalname);
+      const originalName = getOriginalName(file);
 
       const outputPath = path.join(
         compressedDir,

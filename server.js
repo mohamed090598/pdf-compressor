@@ -99,15 +99,20 @@ app.post("/compress", upload.array("pdfs", 10), async (req, res) => {
       const inputPath = file.path;
       toDelete.push(inputPath);
 
-      const originalName = safeName(file.originalname).replace(/\.pdf$/i, "");
-      const outputName = `${originalName}-compressed.pdf`;
+const outputName = safeName(file.originalname);
       const outputPath = path.join(compressedDir, `${Date.now()}-${outputName}`);
       toDelete.push(outputPath);
 
       await compressPdf(inputPath, outputPath, quality);
       compressedFiles.push({ path: outputPath, name: outputName });
     }
+if (compressedFiles.length === 1) {
+  const oneFile = compressedFiles[0];
 
+  return res.download(oneFile.path, oneFile.name, () => {
+    cleanup(toDelete);
+  });
+}
     const zipName = `compressed-pdfs-${Date.now()}.zip`;
     const zipPath = path.join(compressedDir, zipName);
     toDelete.push(zipPath);

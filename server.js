@@ -7,37 +7,45 @@ const { execFile } = require("child_process");
 const archiver = require("archiver");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 
 app.use(cors());
-app.use(express.static("public"));
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
+app.use(express.static(path.join(__dirname, "public")));
+
 const uploadDir = path.join(__dirname, "uploads");
 const compressedDir = path.join(__dirname, "compressed");
 
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 if (!fs.existsSync(compressedDir)) fs.mkdirSync(compressedDir, { recursive: true });
 
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
 function safeName(name) {
-  return path.basename(name).replace(/[^\u0600-\u06FFa-zA-Z0-9._-]/g, "_");
+  return path.basename(name);
 }
 
 const storage = multer.diskStorage({
   destination: uploadDir,
   filename: (req, file, cb) => {
-   cb(null, safeName(file.originalname));
+    // اسم مؤقت فقط على السيرفر عشان ميتكررش
+    cb(null, Date.now() + "-" + Math.round(Math.random() * 1e9) + ".pdf");
+  },
+});
+
 const upload = multer({
   storage,
   limits: {
     files: 10,
-    fileSize: 80 * 1024 * 1024 // 80MB per file
+    fileSize: 100 * 1024 * 1024,
   },
   fileFilter: (req, file, cb) => {
-    const isPdfMime = file.mimetype === "application/pdf";
-    const isPdfExt = path.extname(file.originalname).toLowerCase() === ".pdf";
-    if (isPdfMime || isPdfExt) cb(null, true);
+    const isPdf =
+      file.mimetype === "application/pdf" ||
+      path.extname(file.originalname).toLowerCase() === ".pdf";
+
+    if (isPdf) cb(null, true);
     else cb(new Error("ارفع ملفات PDF فقط"));
   },
 });
@@ -49,7 +57,7 @@ function compressPdf(inputPath, outputPath, quality) {
     const settingsMap = {
       strong: "/screen",
       medium: "/ebook",
-      light: "/printer"
+      light: "/printer",
     };
 
     const pdfSetting = settingsMap[quality] || "/ebook";
@@ -62,7 +70,7 @@ function compressPdf(inputPath, outputPath, quality) {
       "-dQUIET",
       "-dBATCH",
       `-sOutputFile=${outputPath}`,
-      inputPath
+      inputPath,
     ];
 
     execFile(gsCommand, args, (error) => {
@@ -72,46 +80,59 @@ function compressPdf(inputPath, outputPath, quality) {
   });
 }
 
-function cleanup(paths) {
-  for (const p of paths) {
+function cleanup(files) {
+  for (const file of files) {
     try {
-      if (fs.existsSync(p)) fs.unlinkSync(p);
-    } catch (_) {}
+      if (fs.existsSync(file)) fs.unlinkSync(file);
+    } catch (err) {}
   }
 }
 
 app.post("/compress", upload.array("pdfs", 10), async (req, res) => {
-  const inputFiles = req.files || [];
+  const files = req.files || [];
   const quality = req.body.quality || "medium";
   const toDelete = [];
 
-  if (!inputFiles.length) {
-    return res.status(400).json({ error: "اختار ملف PDF واحد على الأقل" });
+  if (!files.length) {
+    return res.status(400).json({ error: "اختار ملفات PDF الأول" });
   }
 
   try {
     const compressedFiles = [];
 
-    for (const file of inputFiles) {
+    for (const file of files) {
       const inputPath = file.path;
       toDelete.push(inputPath);
 
-const outputName = safeName(file.originalname);
-      const outputPath = path.join(compressedDir, `${Date.now()}-${outputName}`);
+      // ده الاسم الأصلي اللي هينزل للمستخدم بدون تغيير
+      const originalName = safeName(file.originalname);
+
+      const outputPath = path.join(
+        compressedDir,
+        Date.now() + "-" + Math.round(Math.random() * 1e9) + ".pdf"
+      );
+
       toDelete.push(outputPath);
 
       await compressPdf(inputPath, outputPath, quality);
-      compressedFiles.push({ path: outputPath, name: outputName });
-    }
-if (compressedFiles.length === 1) {
-  const oneFile = compressedFiles[0];
 
-  return res.download(oneFile.path, oneFile.name, () => {
-    cleanup(toDelete);
-  });
-}
-    const zipName = `compressed-pdfs-${Date.now()}.zip`;
-    const zipPath = path.join(compressedDir, zipName);
+      compressedFiles.push({
+        path: outputPath,
+        name: originalName,
+      });
+    }
+
+    // لو ملف واحد، نزله PDF بنفس الاسم الأصلي
+    if (compressedFiles.length === 1) {
+      const oneFile = compressedFiles[0];
+
+      return res.download(oneFile.path, oneFile.name, () => {
+        cleanup(toDelete);
+      });
+    }
+
+    // لو أكتر من ملف، نزّل ZIP وجواه الملفات بنفس أسمائها الأصلية
+    const zipPath = path.join(compressedDir, "compressed-pdfs.zip");
     toDelete.push(zipPath);
 
     const output = fs.createWriteStream(zipPath);
@@ -134,11 +155,12 @@ if (compressedFiles.length === 1) {
     archive.on("error", (err) => {
       throw err;
     });
-
   } catch (error) {
+    console.error(error);
     cleanup(toDelete);
+
     res.status(500).json({
-      error: "حصل خطأ أثناء ضغط الملفات. تأكد أن Ghostscript مثبت على السيرفر."
+      error: "حصل خطأ أثناء ضغط الملفات",
     });
   }
 });
@@ -146,13 +168,21 @@ if (compressedFiles.length === 1) {
 app.use((error, req, res, next) => {
   if (error instanceof multer.MulterError) {
     if (error.code === "LIMIT_FILE_COUNT") {
-      return res.status(400).json({ error: "مسموح برفع 10 ملفات فقط في المرة الواحدة" });
+      return res.status(400).json({
+        error: "مسموح برفع 10 ملفات فقط",
+      });
     }
+
     if (error.code === "LIMIT_FILE_SIZE") {
-      return res.status(400).json({ error: "حجم الملف كبير. الحد الأقصى 80MB لكل ملف" });
+      return res.status(400).json({
+        error: "حجم الملف كبير جدًا",
+      });
     }
   }
-  res.status(400).json({ error: error.message || "حدث خطأ" });
+
+  res.status(400).json({
+    error: error.message || "حدث خطأ",
+  });
 });
 
 app.listen(PORT, () => {

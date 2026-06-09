@@ -5,10 +5,11 @@ RUN apt-get update && apt-get install -y ghostscript && rm -rf /var/lib/apt/list
 WORKDIR /app
 
 COPY package*.json ./
+
 RUN npm install
 
 COPY . .
 
-EXPOSE 3000
+EXPOSE 8080
 
 CMD ["npm", "start"]

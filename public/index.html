@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ضغط ملفات PDF</title>
+
   <style>
     body {
       margin: 0;
@@ -19,7 +20,7 @@
     .box {
       background: white;
       width: 100%;
-      max-width: 550px;
+      max-width: 580px;
       padding: 30px;
       border-radius: 20px;
       text-align: center;
@@ -56,22 +57,40 @@
 
     button:disabled {
       background: #999;
+      cursor: not-allowed;
     }
 
     #status {
       margin-top: 15px;
       font-weight: bold;
       color: #4b2bbf;
+      min-height: 25px;
+    }
+
+    #fileCount {
+      margin-top: 10px;
+      color: #333;
+      font-size: 14px;
     }
   </style>
 </head>
+
 <body>
   <div class="box">
     <h1>ضغط ملفات PDF</h1>
-    <p>اختار من 1 إلى 10 ملفات PDF مرة واحدة، وبعد الضغط هينزل لك ملف ZIP.</p>
+
+    <p>
+      اختار من 1 إلى 20 ملف PDF مرة واحدة.
+      <br>
+      لو ملف واحد هينزل PDF بنفس الاسم.
+      <br>
+      لو أكتر من ملف هينزل ZIP وجواه الملفات بنفس أسمائها.
+    </p>
 
     <form id="form">
-      <input type="file" name="pdfs" accept="application/pdf,.pdf" multiple required />
+      <input id="pdfs" type="file" name="pdfs" accept="application/pdf,.pdf" multiple required />
+
+      <div id="fileCount"></div>
 
       <select name="quality">
         <option value="strong">ضغط قوي جدًا</option>
@@ -87,20 +106,42 @@
 
   <script>
     const form = document.getElementById("form");
+    const input = document.getElementById("pdfs");
     const status = document.getElementById("status");
     const btn = document.getElementById("btn");
+    const fileCount = document.getElementById("fileCount");
+
+    input.addEventListener("change", function () {
+      const files = input.files.length;
+
+      if (files > 20) {
+        status.textContent = "مسموح برفع 20 ملف فقط";
+        input.value = "";
+        fileCount.textContent = "";
+        return;
+      }
+
+      fileCount.textContent = files ? "عدد الملفات المختارة: " + files : "";
+      status.textContent = "";
+    });
 
     form.addEventListener("submit", async function(e) {
       e.preventDefault();
 
-      const files = form.querySelector("input[type=file]").files;
+      const files = input.files;
 
-      if (files.length > 10) {
-        status.textContent = "مسموح برفع 10 ملفات فقط";
+      if (!files.length) {
+        status.textContent = "اختار ملفات PDF الأول";
+        return;
+      }
+
+      if (files.length > 20) {
+        status.textContent = "مسموح برفع 20 ملف فقط";
         return;
       }
 
       const formData = new FormData(form);
+
       status.textContent = "جاري رفع وضغط الملفات...";
       btn.disabled = true;
 
@@ -111,7 +152,14 @@
         });
 
         if (!response.ok) {
-          status.textContent = "حصل خطأ أثناء الضغط";
+          let message = "حصل خطأ أثناء الضغط";
+
+          try {
+            const data = await response.json();
+            if (data.error) message = data.error;
+          } catch (err) {}
+
+          status.textContent = message;
           btn.disabled = false;
           return;
         }
@@ -121,10 +169,19 @@
 
         const a = document.createElement("a");
         a.href = url;
-        a.download = "compressed-pdfs.zip";
+
+        if (files.length === 1) {
+          a.download = files[0].name;
+        } else {
+          a.download = "compressed-pdfs.zip";
+        }
+
+        document.body.appendChild(a);
         a.click();
+        a.remove();
 
         URL.revokeObjectURL(url);
+
         status.textContent = "تم الضغط والتحميل بنجاح";
       } catch (err) {
         status.textContent = "فشل الاتصال بالسيرفر";

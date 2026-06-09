@@ -1,62 +1,93 @@
 const express = require("express");
 const multer = require("multer");
-const path = require("path");
 const fs = require("fs");
+const path = require("path");
+const { PDFDocument } = require("pdf-lib");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-// مجلدات التحميل والملفات المضغوطة
-const uploadDir = path.join(__dirname, "uploads");
-const compressedDir = path.join(__dirname, "compressed");
-
-// التأكد من وجود المجلدات
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-if (!fs.existsSync(compressedDir)) fs.mkdirSync(compressedDir, { recursive: true });
-
-// دالة لحفظ الاسم الأصلي بدون تغييره
-function safeName(name) {
-  return path.basename(name);
-}
+const port = process.env.PORT || 3000;
 
 // إعداد التخزين باستخدام multer
-const storage = multer.diskStorage({
-  destination: uploadDir,
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + "-" + safeName(file.originalname));
-  }
-});
-
-// رفع حتى 20 ملف PDF
+const storage = multer.memoryStorage();
 const upload = multer({
-  storage: storage,
-  limits: { files: 20 },
+  storage,
+  limits: {
+    fileSize: 20 * 1024 * 1024, // 20 ميجا لكل ملف
+  },
   fileFilter: (req, file, cb) => {
     if (file.mimetype !== "application/pdf") {
-      return cb(new Error("مسموح فقط بملفات PDF"));
+      cb(new Error("الملف يجب أن يكون PDF"));
+    } else {
+      cb(null, true);
     }
-    cb(null, true);
-  }
-});
+  },
+}).array("pdfs", 20); // الحد الأقصى 20 ملف PDF
 
-// إعداد Express
 app.use(express.static("public"));
 
-// رفع الملفات
-app.post("/upload", upload.array("pdfs", 20), (req, res) => {
-  const files = req.files;
-  if (!files || files.length === 0) {
-    return res.status(400).json({ error: "مفيش ملفات تم رفعها" });
-  }
-  if (files.length > 20) {
-    return res.status(400).json({ error: "مسموح برفع 20 ملف فقط" });
-  }
-
-  // هنا ممكن تضيف ضغط PDF لو عايز
-  res.json({ message: "تم رفع الملفات بنجاح", files: files.map(f => f.filename) });
+// صفحة رفع الملفات
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// مسار ضغط الملفات
+app.post("/compress", (req, res) => {
+  upload(req, res, async (err) => {
+    if (err) {
+      return res.status(400).send(err.message);
+    }
+
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).send("لم يتم رفع أي ملف");
+    }
+
+    try {
+      // ضغط كل ملف PDF
+      const compressedFiles = await Promise.all(
+        req.files.map(async (file) => {
+          const pdfDoc = await PDFDocument.load(file.buffer);
+          const pdfBytes = await pdfDoc.save({ useObjectStreams: true });
+          return {
+            filename: file.originalname,
+            buffer: pdfBytes,
+          };
+        })
+      );
+
+      // إنشاء مجلد مؤقت للملفات المضغوطة
+      const tempDir = path.join(__dirname, "temp");
+      if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
+
+      const zipFilePath = path.join(tempDir, "compressed_files.zip");
+      const archiver = require("archiver");
+      const output = fs.createWriteStream(zipFilePath);
+      const archive = archiver("zip", { zlib: { level: 9 } });
+
+      output.on("close", () => {
+        res.download(zipFilePath, "compressed_files.zip", (err) => {
+          if (err) console.error(err);
+          fs.rmSync(tempDir, { recursive: true, force: true });
+        });
+      });
+
+      archive.on("error", (err) => {
+        throw err;
+      });
+
+      archive.pipe(output);
+
+      compressedFiles.forEach((file) => {
+        archive.append(file.buffer, { name: file.filename });
+      });
+
+      await archive.finalize();
+    } catch (e) {
+      console.error(e);
+      res.status(500).send("حدث خطأ أثناء ضغط الملفات");
+    }
+  });
+});
+
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
 });

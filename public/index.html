@@ -3,119 +3,224 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
   <title>ضغط ملفات PDF</title>
+
   <style>
     body {
-      font-family: Arial, sans-serif;
       margin: 0;
       min-height: 100vh;
+      font-family: Arial, sans-serif;
       background: linear-gradient(135deg, #4b2bbf, #9b4dff);
       display: flex;
-      justify-content: center;
       align-items: center;
+      justify-content: center;
       padding: 20px;
     }
+
     .box {
-      background: #fff;
-      padding: 30px;
-      border-radius: 20px;
-      max-width: 600px;
+      background: white;
       width: 100%;
-      box-shadow: 0 15px 40px rgba(0,0,0,0.2);
+      max-width: 600px;
+      padding: 30px;
+      border-radius: 22px;
       text-align: center;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.25);
     }
-    h1 { color: #4b2bbf; margin-bottom: 10px; }
-    p { color: #555; line-height: 1.5; }
+
+    h1 {
+      color: #4b2bbf;
+      margin-bottom: 10px;
+      font-size: 34px;
+    }
+
+    p {
+      color: #555;
+      line-height: 1.8;
+      font-size: 16px;
+    }
+
     input, select, button {
       width: 100%;
       padding: 14px;
       margin-top: 15px;
-      border-radius: 10px;
+      border-radius: 12px;
       border: 1px solid #ddd;
       font-size: 16px;
       box-sizing: border-box;
     }
+
     button {
       background: #4b2bbf;
-      color: #fff;
+      color: white;
       border: none;
       cursor: pointer;
       font-weight: bold;
     }
+
     button:disabled {
       background: #999;
       cursor: not-allowed;
     }
-    #status { margin-top: 15px; font-weight: bold; color: #4b2bbf; min-height: 25px; }
-    #fileCount { margin-top: 10px; font-size: 14px; color: #333; }
+
+    #fileCount {
+      margin-top: 10px;
+      color: #333;
+      font-size: 14px;
+    }
+
+    #status {
+      margin-top: 16px;
+      min-height: 28px;
+      font-weight: bold;
+      color: #4b2bbf;
+    }
+
+    .note {
+      margin-top: 15px;
+      font-size: 13px;
+      color: #777;
+    }
   </style>
 </head>
+
 <body>
   <div class="box">
     <h1>ضغط ملفات PDF</h1>
-    <p>اختار من 1 إلى 20 ملف PDF مرة واحدة. لو ملف واحد هينزل PDF بنفس الاسم. لو أكتر من ملف هينزل ZIP بجميع الملفات بأسمائها الأصلية.</p>
+
+    <p>
+      اختار من 1 إلى 20 ملف PDF مرة واحدة.
+      <br />
+      الحد الأقصى 20 ميجا لكل ملف.
+      <br />
+      لو ملف واحد هينزل بنفس الاسم، ولو أكتر من ملف هينزل ZIP.
+    </p>
 
     <form id="form">
-      <input id="pdfs" type="file" name="pdfs" accept=".pdf" multiple required />
+      <input
+        id="pdfs"
+        type="file"
+        name="pdfs"
+        accept="application/pdf,.pdf"
+        multiple
+        required
+      />
+
       <div id="fileCount"></div>
+
       <select name="quality">
-        <option value="strong">ضغط قوي جدًا</option>
-        <option value="medium" selected>ضغط متوسط</option>
-        <option value="light">ضغط خفيف وجودة أعلى</option>
+        <option value="strong">ضغط قوي جدًا - حجم أقل</option>
+        <option value="medium" selected>ضغط متوسط - أفضل اختيار</option>
+        <option value="light">ضغط خفيف - جودة أعلى</option>
       </select>
+
       <button id="btn" type="submit">ضغط الملفات</button>
     </form>
+
     <div id="status"></div>
+
+    <div class="note">
+      لو ظهر خطأ، جرّب ملف أصغر أو اختار ضغط خفيف.
+    </div>
   </div>
 
   <script>
     const form = document.getElementById("form");
     const input = document.getElementById("pdfs");
     const status = document.getElementById("status");
-    const fileCount = document.getElementById("fileCount");
     const btn = document.getElementById("btn");
+    const fileCount = document.getElementById("fileCount");
 
-    input.addEventListener("change", () => {
-      const files = input.files.length;
-      if (files > 20) {
+    input.addEventListener("change", function () {
+      const files = Array.from(input.files);
+
+      if (files.length > 20) {
         status.textContent = "مسموح برفع 20 ملف فقط";
         input.value = "";
         fileCount.textContent = "";
         return;
       }
-      fileCount.textContent = files ? "عدد الملفات المختارة: " + files : "";
+
+      const tooLarge = files.find(file => file.size > 20 * 1024 * 1024);
+
+      if (tooLarge) {
+        status.textContent = "في ملف أكبر من 20 ميجا: " + tooLarge.name;
+        input.value = "";
+        fileCount.textContent = "";
+        return;
+      }
+
+      fileCount.textContent = files.length
+        ? "عدد الملفات المختارة: " + files.length
+        : "";
+
       status.textContent = "";
     });
 
-    form.addEventListener("submit", async (e) => {
+    form.addEventListener("submit", async function (e) {
       e.preventDefault();
-      const files = input.files;
-      if (!files.length) { status.textContent = "اختار ملفات PDF أولاً"; return; }
-      if (files.length > 20) { status.textContent = "مسموح برفع 20 ملف فقط"; return; }
+
+      const files = Array.from(input.files);
+
+      if (!files.length) {
+        status.textContent = "اختار ملفات PDF الأول";
+        return;
+      }
+
+      if (files.length > 20) {
+        status.textContent = "مسموح برفع 20 ملف فقط";
+        return;
+      }
+
+      const tooLarge = files.find(file => file.size > 20 * 1024 * 1024);
+
+      if (tooLarge) {
+        status.textContent = "في ملف أكبر من 20 ميجا: " + tooLarge.name;
+        return;
+      }
 
       const formData = new FormData(form);
+
       btn.disabled = true;
       status.textContent = "جاري رفع وضغط الملفات...";
 
       try {
-        const response = await fetch("/compress", { method: "POST", body: formData });
+        const response = await fetch("/compress", {
+          method: "POST",
+          body: formData
+        });
+
         if (!response.ok) {
-          let msg = "حدث خطأ أثناء الضغط";
-          try { const data = await response.json(); if(data.error) msg = data.error; } catch {}
-          status.textContent = msg;
+          let message = "حدث خطأ أثناء الضغط";
+
+          try {
+            const data = await response.json();
+            if (data.error) message = data.error;
+          } catch (err) {}
+
+          status.textContent = message;
           btn.disabled = false;
           return;
         }
 
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
+
         const a = document.createElement("a");
         a.href = url;
-        a.download = files.length === 1 ? files[0].name : "compressed_files.zip";
+
+        if (files.length === 1) {
+          a.download = files[0].name;
+        } else {
+          a.download = "compressed-pdfs.zip";
+        }
+
         document.body.appendChild(a);
         a.click();
         a.remove();
+
         URL.revokeObjectURL(url);
+
         status.textContent = "تم الضغط والتحميل بنجاح";
       } catch (err) {
         status.textContent = "فشل الاتصال بالسيرفر";

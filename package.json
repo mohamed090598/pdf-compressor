@@ -1,7 +1,7 @@
 {
   "name": "pdf-compressor",
   "version": "1.0.0",
-  "description": "PDF compressor website",
+  "description": "PDF compressor website with Ghostscript",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

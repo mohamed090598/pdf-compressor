@@ -1,7 +1,7 @@
 {
   "name": "pdf-10-files-compressor",
   "version": "1.0.0",
-  "description": "Arabic website to upload and compress up to 10 PDF files at once and download them as ZIP.",
+  "description": "PDF compressor website",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
